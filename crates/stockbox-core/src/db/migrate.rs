@@ -55,15 +55,15 @@ pub struct CsvBundle {
 impl CsvBundle {
     pub fn incrustado() -> Self {
         Self {
-            empleados: include_str!("../../../data/empleado.csv").to_string(),
-            proveedores: include_str!("../../../data/proveedores.csv").to_string(),
-            clientes: include_str!("../../../data/clientes.csv").to_string(),
-            inventario: include_str!("../../../data/inventario.csv").to_string(),
-            entradas: include_str!("../../../data/entradas.csv").to_string(),
-            caja: include_str!("../../../data/caja.csv").to_string(),
-            ventas: include_str!("../../../data/ventas.csv").to_string(),
-            garantias: include_str!("../../../data/garantias.csv").to_string(),
-            pedidos: include_str!("../../../data/pedidos.csv").to_string(),
+            empleados: include_str!("../../../../data/empleado.csv").to_string(),
+            proveedores: include_str!("../../../../data/proveedores.csv").to_string(),
+            clientes: include_str!("../../../../data/clientes.csv").to_string(),
+            inventario: include_str!("../../../../data/inventario.csv").to_string(),
+            entradas: include_str!("../../../../data/entradas.csv").to_string(),
+            caja: include_str!("../../../../data/caja.csv").to_string(),
+            ventas: include_str!("../../../../data/ventas.csv").to_string(),
+            garantias: include_str!("../../../../data/garantias.csv").to_string(),
+            pedidos: include_str!("../../../../data/pedidos.csv").to_string(),
         }
     }
 

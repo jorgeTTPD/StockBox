@@ -55,25 +55,42 @@ npm run tauri dev
 Comandos útiles:
 
 ```bash
-cargo test --manifest-path src-tauri/Cargo.toml   # pruebas de Rust
-npm run build                                     # typecheck + build del frontend
-npm run tauri build                               # instalador/binario de producción
+cargo test -p stockbox-core -p stockbox            # pruebas de Rust del núcleo y Tauri
+npm run build                                      # typecheck + build del frontend
+npm run tauri build                                # instalador Tauri (.deb/.rpm/.AppImage)
+cargo run -p stockbox-gpui                          # versión GPUI (sin WebView)
 ```
 
-La base de datos se crea automáticamente en el directorio de datos de la aplicación (`app_data_dir/stockbox.sqlite`) y se siembra con los CSV de `data/` la primera vez.
+La base de datos se crea automáticamente en el directorio de datos de la aplicación. La versión Tauri usa `app_data_dir/stockbox.sqlite` y la GPUI `~/.local/share/stockbox-gpui/stockbox.sqlite`; ambas se siembran con los CSV de `data/`.
+
+## Dos interfaces, un mismo backend
+
+El proyecto es un workspace de Cargo. Todo el backend vive en `stockbox-core` y es reutilizado por las dos aplicaciones:
+
+| App | Estado | Comando | Descripción |
+| --- | --- | --- | --- |
+| Tauri + React | Estable / recomendada | `npm run tauri dev` | Interfaz completa con todos los roles y funciones |
+| GPUI (Rust puro) | Completa / sin WebView | `cargo run -p stockbox-gpui` | Misma lógica, UI acelerada por GPU con `gpui-component` |
+
+Nota: la versión GPUI cubre login, dashboard, inventario, ventas, entradas, productos, empleados, proveedores, devoluciones, garantías y asistente IA. La selección de archivos CSV y de imágenes solo está implementada en la versión Tauri.
+
+Los artefactos se publican en GitHub Releases con tags separados: `stockbox-tauri-vX` y `stockbox-gpui-vX`.
 
 ## Estructura
 
 ```
-src/                    interfaz React (login, vistas por rol, componentes)
-src-tauri/src/
-  commands.rs           comandos Tauri y control de sesión/roles
-  db/                   conexión, esquema y migrador de CSV
-  servicios/            catalogo, ventas, almacen, admin
-  models.rs             tipos serializables compartidos
-  security.rs           Argon2, IDs y fechas
-  validacion.rs         reglas de validación del dominio
-  csv_io.rs             lectura/escritura CSV
-data/                   CSV originales (siembra y ejemplos)
-src-tauri/tests/        pruebas de integración de Rust
+crates/
+  stockbox-core/        backend compartido (SQLite, dominio, CSV, IA, imágenes)
+    src/db/             conexión, esquema y migrador
+    src/servicios/      catalogo, ventas, almacen, admin, dashboard, asistente, imagenes
+    src/models.rs       tipos serializables
+    src/security.rs     Argon2, IDs y fechas
+    src/validacion.rs   reglas de validación
+    src/csv_io.rs       lectura/escritura CSV
+  stockbox-gpui/        interfaz GPUI (usa stockbox-core)
+src-tauri/
+  src/commands.rs       comandos Tauri (delgados, delegan en el core)
+  tests/                pruebas de integración
+src/                    interfaz React del frontend Tauri
+data/                   CSV originales, imágenes y ejemplo de config de IA
 ```
