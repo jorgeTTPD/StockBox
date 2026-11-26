@@ -58,7 +58,3 @@ src-tauri/src/
 data/                   CSV originales (siembra y ejemplos)
 src-tauri/tests/        pruebas de integración de Rust
 ```
-
-## Licencia
-
-Proyecto derivado de Tech-Flow. Sin licencia declarada en el repositorio original.
