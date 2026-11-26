@@ -1,6 +1,6 @@
 # StockBox
 
-Reescritura de **Tech-Flow** (proyecto original de fausto-lang) como aplicación de escritorio con **Tauri 2 + Rust + React/TypeScript + SQLite**.
+Reescritura de aplicación de escritorio con **Tauri 2 + Rust + React/TypeScript + SQLite**.
 
 Gestión de inventario, entradas de almacén, ventas, proformas, anulaciones, garantías y reportes para una tienda. SQLite es la única fuente de verdad; los CSV se usan solo para migración, importación y exportación.
 
