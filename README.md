@@ -58,7 +58,7 @@ Comandos útiles:
 cargo test -p stockbox-core -p stockbox            # pruebas de Rust del núcleo y Tauri
 npm run build                                      # typecheck + build del frontend
 npm run tauri build                                # instalador Tauri (.deb/.rpm/.AppImage)
-cargo run -p stockbox-gpui                          # versión GPUI (experimental)
+cargo run -p stockbox-gpui                          # versión GPUI (sin WebView)
 ```
 
 La base de datos se crea automáticamente en el directorio de datos de la aplicación. La versión Tauri usa `app_data_dir/stockbox.sqlite` y la GPUI `~/.local/share/stockbox-gpui/stockbox.sqlite`; ambas se siembran con los CSV de `data/`.
@@ -70,7 +70,9 @@ El proyecto es un workspace de Cargo. Todo el backend vive en `stockbox-core` y 
 | App | Estado | Comando | Descripción |
 | --- | --- | --- | --- |
 | Tauri + React | Estable / recomendada | `npm run tauri dev` | Interfaz completa con todos los roles y funciones |
-| GPUI (Rust puro) | Experimental | `cargo run -p stockbox-gpui` | Sin WebView; misma lógica, UI en GPU |
+| GPUI (Rust puro) | Completa / sin WebView | `cargo run -p stockbox-gpui` | Misma lógica, UI acelerada por GPU con `gpui-component` |
+
+Nota: la versión GPUI cubre login, dashboard, inventario, ventas, entradas, productos, empleados, proveedores, devoluciones, garantías y asistente IA. La selección de archivos CSV y de imágenes solo está implementada en la versión Tauri.
 
 Los artefactos se publican en GitHub Releases con tags separados: `stockbox-tauri-vX` y `stockbox-gpui-vX`.
 
