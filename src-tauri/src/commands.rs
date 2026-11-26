@@ -7,10 +7,7 @@ use crate::models::{
     Preferencias, Producto, ProductoInput, Proveedor, ProveedorInput, ResultadoVenta, Sesion,
     Venta, VistaPrevia,
 };
-use crate::security;
-use crate::servicios::{admin, almacen, asistente, catalogo, dashboard, imagenes, ventas};
-use rusqlite::params;
-use rusqlite::OptionalExtension;
+use crate::servicios::{admin, almacen, asistente, auth, catalogo, dashboard, imagenes, ventas};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
@@ -69,40 +66,12 @@ pub fn iniciar_sesion(
     state: State<'_, AppState>,
 ) -> std::result::Result<Sesion, String> {
     let db = bloqueo(&state)?;
-    let registro: Option<(String, String, String, String)> = db
-        .conn
-        .query_row(
-            "SELECT ci, nombre, rol, contrasena_hash FROM empleados WHERE lower(ci) = lower(?1)",
-            params![ci.trim()],
-            |fila| Ok((fila.get(0)?, fila.get(1)?, fila.get(2)?, fila.get(3)?)),
-        )
-        .optional()
-        .map_err(AppError::from)?;
-    let Some((ci_real, nombre, rol_real, hash)) = registro else {
-        return Err("Credenciales incorrectas".into());
-    };
-    if !security::verify_password(&contrasena, &hash) {
-        return Err("Credenciales incorrectas".into());
-    }
-    let rol_solicitado = match rol.trim().to_ascii_uppercase().as_str() {
-        "ADMIN" | "ADMINISTRADOR" => "ADMINISTRADOR",
-        "CAJERO" | "VENDEDOR" => "CAJERO",
-        "ALMACEN" | "ALMACENERO" => "ALMACENERO",
-        _ => "",
-    };
-    if rol_solicitado != rol_real {
-        return Err("El rol seleccionado no corresponde a este usuario".into());
-    }
-    let sesion = Sesion {
-        ci: ci_real.clone(),
-        nombre,
-        rol: rol_real,
-    };
+    let sesion = auth::verificar(&db.conn, &ci, &contrasena, &rol)?;
+    db.auditar(&sesion.ci, "INICIAR_SESION", &sesion.rol)?;
     *state
         .sesion
         .lock()
         .map_err(|_| AppError::Validation("Sesión bloqueada".into()))? = Some(sesion.clone());
-    db.auditar(&ci_real, "INICIAR_SESION", &sesion.rol)?;
     Ok(sesion)
 }
 

@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod almacen;
 pub mod asistente;
+pub mod auth;
 pub mod catalogo;
 pub mod dashboard;
 pub mod imagenes;
