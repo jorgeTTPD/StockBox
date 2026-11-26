@@ -178,6 +178,86 @@ pub struct ResultadoVenta {
     pub factura: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Devolucion {
+    pub id_devolucion: String,
+    pub id_venta: String,
+    pub id_orden: String,
+    pub id_producto: String,
+    pub nombre_producto: String,
+    pub cantidad: i64,
+    pub precio_unitario: f64,
+    pub total: f64,
+    pub fecha: String,
+    pub ci_empleado: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct LineaVenta {
+    pub id_venta: String,
+    pub id_orden: String,
+    pub estado: String,
+    pub id_producto: String,
+    pub nombre_producto: String,
+    pub cantidad: i64,
+    pub precio_unitario: f64,
+    pub total: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DashboardResumen {
+    pub total: f64,
+    pub cantidad_ventas: i64,
+    pub unidades: i64,
+    pub ticket_promedio: f64,
+    pub productos: i64,
+    pub stock_critico: i64,
+    pub valor_inventario: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PuntoDia {
+    pub fecha: String,
+    pub total: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Grupo {
+    pub etiqueta: String,
+    pub valor: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DashboardDatos {
+    pub desde: String,
+    pub hasta: String,
+    pub resumen: DashboardResumen,
+    pub ventas_por_dia: Vec<PuntoDia>,
+    pub ventas_por_categoria: Vec<Grupo>,
+    pub top_productos: Vec<Grupo>,
+    pub stock_por_categoria: Vec<Grupo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ConfigAsistente {
+    pub provider: String,
+    pub modelo: String,
+    pub configurada: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Preferencias {
+    pub tema_oscuro: bool,
+    pub periodo_dashboard: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct VistaPrevia {
+    pub columnas: Vec<String>,
+    pub filas: Vec<Vec<String>>,
+    pub total: usize,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Estadisticas {
     pub productos: i64,

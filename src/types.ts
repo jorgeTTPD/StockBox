@@ -136,6 +136,70 @@ export interface MigrationReport {
   filas_omitidas: number;
 }
 
+export interface LineaVenta {
+  id_venta: string;
+  id_orden: string;
+  estado: string;
+  id_producto: string;
+  nombre_producto: string;
+  cantidad: number;
+  precio_unitario: number;
+  total: number;
+}
+
+export interface Devolucion {
+  id_devolucion: string;
+  id_venta: string;
+  id_orden: string;
+  id_producto: string;
+  nombre_producto: string;
+  cantidad: number;
+  precio_unitario: number;
+  total: number;
+  fecha: string;
+  ci_empleado: string;
+}
+
+export interface PuntoDia { fecha: string; total: number }
+export interface Grupo { etiqueta: string; valor: number }
+
+export interface DashboardResumen {
+  total: number;
+  cantidad_ventas: number;
+  unidades: number;
+  ticket_promedio: number;
+  productos: number;
+  stock_critico: number;
+  valor_inventario: number;
+}
+
+export interface DashboardDatos {
+  desde: string;
+  hasta: string;
+  resumen: DashboardResumen;
+  ventas_por_dia: PuntoDia[];
+  ventas_por_categoria: Grupo[];
+  top_productos: Grupo[];
+  stock_por_categoria: Grupo[];
+}
+
+export interface ConfigAsistente {
+  provider: string;
+  modelo: string;
+  configurada: boolean;
+}
+
+export interface Preferencias {
+  tema_oscuro: boolean;
+  periodo_dashboard: string;
+}
+
+export interface VistaPrevia {
+  columnas: string[];
+  filas: string[][];
+  total: number;
+}
+
 export interface ProductoInput {
   id_producto?: string | null;
   nombre: string;

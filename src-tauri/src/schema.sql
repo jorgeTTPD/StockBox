@@ -124,6 +124,29 @@ CREATE TABLE IF NOT EXISTS pedidos (
     PRIMARY KEY (id_pedido, id_producto)
 );
 
+CREATE TABLE IF NOT EXISTS devoluciones (
+    id_devolucion TEXT PRIMARY KEY,
+    id_venta TEXT NOT NULL,
+    id_orden TEXT NOT NULL DEFAULT '',
+    id_producto TEXT NOT NULL,
+    nombre_producto TEXT NOT NULL,
+    cantidad INTEGER NOT NULL CHECK (cantidad > 0),
+    precio_unitario REAL NOT NULL,
+    total REAL NOT NULL,
+    fecha TEXT NOT NULL,
+    ci_empleado TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_devoluciones_venta ON devoluciones(id_venta);
+
+CREATE TABLE IF NOT EXISTS preferencias (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+INSERT OR IGNORE INTO preferencias(key, value) VALUES('tema_oscuro', 'true');
+INSERT OR IGNORE INTO preferencias(key, value) VALUES('periodo_dashboard', 'ULTIMOS_7');
+
 CREATE TABLE IF NOT EXISTS auditoria (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     fecha TEXT NOT NULL,

@@ -12,9 +12,13 @@ const roles: { valor: Rol; texto: string; ci: string; clave: string }[] = [
 export default function Login({
   onLogin,
   avisar,
+  temaOscuro,
+  cambiarTema,
 }: {
   onLogin: (sesion: Sesion) => void;
   avisar: Avisar;
+  temaOscuro: boolean;
+  cambiarTema: () => void;
 }) {
   const [rol, setRol] = useState<Rol>("ADMINISTRADOR");
   const [ci, setCi] = useState("ADM-001");
@@ -79,9 +83,14 @@ export default function Login({
             {cargando ? "Entrando…" : "Entrar"}
           </button>
         </form>
-        <button className="enlace" onClick={() => setVerDemo(!verDemo)}>
-          {verDemo ? "Ocultar credenciales de prueba" : "Ver credenciales de prueba"}
-        </button>
+        <div className="barra" style={{ marginTop: 12, justifyContent: "space-between" }}>
+          <button className="neutro mini" onClick={cambiarTema}>
+            {temaOscuro ? "☀ Tema claro" : "☾ Tema oscuro"}
+          </button>
+          <button className="enlace" onClick={() => setVerDemo(!verDemo)}>
+            {verDemo ? "Ocultar credenciales de prueba" : "Ver credenciales de prueba"}
+          </button>
+        </div>
         {verDemo && (
           <div className="demo">
             {roles.map((opcion) => (

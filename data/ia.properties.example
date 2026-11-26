@@ -1,0 +1,17 @@
+# Copia este archivo a ia.properties (misma carpeta) y coloca tu API key.
+# ia.properties está en .gitignore: no se commitea.
+#
+# Proveedores soportados (ambos usan API tipo OpenAI):
+#   openrouter -> https://openrouter.ai/keys
+#   nvidia     -> https://build.nvidia.com (sección "Get API Key" de cualquier modelo)
+provider=openrouter
+
+# Key del proveedor. También puedes usar variables de entorno en vez de este archivo:
+#   export OPENROUTER_API_KEY=sk-or-...    (provider=openrouter)
+#   export NVIDIA_API_KEY=nvapi-...        (provider=nvidia)
+apiKey=TU_API_KEY_AQUI
+
+# Opcionales: sobreescriben URL y modelo por defecto.
+# NVIDIA: por defecto nvidia/nemotron-3.5-lightning-30b-a3b. Alternativa: deepseek-ai/deepseek-v4.1-flash
+# model=nvidia/nemotron-3.5-lightning-30b-a3b
+# Nota: meta/llama-3.1-8b-instruct fue retirado (410 Gone desde 2026-08-26).

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { dinero, errorTexto, fechaHora } from "../formato";
-import type { ItemCarrito, Producto, ResultadoVenta, Venta } from "../types";
+import type { ConfigAsistente, Devolucion, ItemCarrito, LineaVenta, Producto, ResultadoVenta, Venta } from "../types";
+import ImportadorCSV from "../components/ImportadorCSV";
 import {
   Campo,
   DataTable,
@@ -13,7 +14,7 @@ import {
   type Columna,
 } from "../components/UI";
 
-type Seccion = "Nueva venta" | "Ventas" | "Anular venta" | "Garantías";
+type Seccion = "Nueva venta" | "Ventas" | "Devoluciones" | "Anular venta" | "Garantías" | "Asistente IA";
 
 function estadoTono(estado: string) {
   if (estado === "CONFIRMADA") return "verde";
@@ -128,17 +129,6 @@ function NuevaVenta({ avisar }: { avisar: Avisar }) {
     }
   };
 
-  const importarOrden = async () => {
-    try {
-      const ruta = await api.elegirArchivo();
-      if (!ruta) return;
-      const cantidad = await api.importarOrdenes(ruta);
-      avisar(`${cantidad} orden(es) importadas como proformas`, "ok");
-    } catch (error) {
-      avisar(errorTexto(error), "error");
-    }
-  };
-
   const columnasResultados: Columna<Producto>[] = [
     { titulo: "ID", valor: (p) => p.id_producto, ancho: "110px" },
     { titulo: "Producto", valor: (p) => p.nombre },
@@ -208,7 +198,16 @@ function NuevaVenta({ avisar }: { avisar: Avisar }) {
             onKeyDown={(e) => e.key === "Enter" && buscar()}
           />
           <button className="secundario" onClick={buscar}>Buscar</button>
-          <button className="neutro" onClick={importarOrden}>Importar orden CSV</button>
+          <ImportadorCSV
+            tipo="ordenes"
+            titulo="órdenes"
+            boton="Importar orden CSV"
+            avisar={avisar}
+            onConfirmar={async (ruta) => {
+              const cantidad = await api.importarOrdenes(ruta);
+              avisar(`${cantidad} orden(es) importadas como proformas`, "ok");
+            }}
+          />
         </div>
         <DataTable filas={resultados} columnas={columnasResultados} vacio="Busca un producto para empezar" />
       </Tarjeta>
@@ -407,16 +406,191 @@ function Garantias({ avisar }: { avisar: Avisar }) {
   );
 }
 
+function Devoluciones({ avisar }: { avisar: Avisar }) {
+  const [referencia, setReferencia] = useState("");
+  const [linea, setLinea] = useState<LineaVenta | null>(null);
+  const [cantidad, setCantidad] = useState(1);
+  const [lista, setLista] = useState<Devolucion[]>([]);
+  const [confirmando, setConfirmando] = useState(false);
+
+  const cargar = () =>
+    api.listarDevoluciones()
+      .then(setLista)
+      .catch((error) => avisar(errorTexto(error), "error"));
+  useEffect(() => { cargar(); }, []);
+
+  const buscar = async () => {
+    try {
+      const encontrada = await api.buscarVenta(referencia);
+      if (!encontrada || encontrada.estado !== "CONFIRMADA") {
+        avisar("No se encontró una venta confirmada con ese ID", "error");
+        setLinea(null);
+        return;
+      }
+      setLinea(encontrada);
+      setCantidad(1);
+    } catch (error) {
+      avisar(errorTexto(error), "error");
+    }
+  };
+
+  const registrar = async () => {
+    if (!linea) return;
+    try {
+      const id = await api.devolverVenta(linea.id_venta, cantidad);
+      avisar(`Devolución ${id} registrada`, "ok");
+      setLinea(null);
+      setConfirmando(false);
+      setReferencia("");
+      cargar();
+    } catch (error) {
+      avisar(errorTexto(error), "error");
+    }
+  };
+
+  const columnas: Columna<Devolucion>[] = [
+    { titulo: "ID", valor: (d) => d.id_devolucion, ancho: "130px" },
+    { titulo: "Venta", valor: (d) => d.id_venta, ancho: "130px" },
+    { titulo: "Producto", valor: (d) => d.nombre_producto },
+    { titulo: "Unidades", valor: (d) => <span className="num">{d.cantidad}</span>, ancho: "90px" },
+    { titulo: "Total", valor: (d) => <span className="num">{dinero(d.total)}</span>, ancho: "110px" },
+    { titulo: "Fecha", valor: (d) => fechaHora(d.fecha), ancho: "150px" },
+  ];
+
+  return (
+    <>
+      <Tarjeta titulo="Devolución parcial">
+        <p className="texto-suave">Devuelve unidades de una venta confirmada al inventario. Si devuelves todas, la venta y su garantía se anulan.</p>
+        <div className="barra">
+          <input
+            placeholder="ID de venta (VEN-…)"
+            value={referencia}
+            onChange={(e) => setReferencia(e.target.value)}
+          />
+          <button className="secundario" onClick={buscar}>Buscar venta</button>
+        </div>
+        {linea && (
+          <div className="lista-simple">
+            <div>{linea.nombre_producto} · vendidas {linea.cantidad} · {dinero(linea.precio_unitario)} c/u</div>
+            <div>Disponible para devolver: {linea.cantidad}</div>
+          </div>
+        )}
+        {linea && (
+          <div className="barra">
+            <Campo etiqueta="Unidades a devolver">
+              <input type="number" min={1} max={linea.cantidad} value={cantidad} onChange={(e) => setCantidad(Number(e.target.value))} />
+            </Campo>
+            <button className="peligro" onClick={() => setConfirmando(true)}>Devolver</button>
+          </div>
+        )}
+      </Tarjeta>
+      <Tarjeta titulo="Historial de devoluciones">
+        <DataTable filas={lista} columnas={columnas} vacio="Sin devoluciones registradas" />
+      </Tarjeta>
+      {confirmando && linea && (
+        <Modal titulo="Confirmar devolución" onCerrar={() => setConfirmando(false)}>
+          <p>Se devolverán <strong>{cantidad}</strong> unidad(es) de <strong>{linea.nombre_producto}</strong> al inventario.</p>
+          <p className="texto-suave">Quedarán {linea.cantidad - cantidad} en la venta.</p>
+          <div className="acciones">
+            <button className="neutro" onClick={() => setConfirmando(false)}>Cancelar</button>
+            <button className="peligro" onClick={registrar}>Confirmar</button>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+type MensajeChat = { rol: "usuario" | "ia" | "error"; texto: string };
+
+function AsistenteIA({ avisar }: { avisar: Avisar }) {
+  const [config, setConfig] = useState<ConfigAsistente | null>(null);
+  const [mensajes, setMensajes] = useState<MensajeChat[]>([]);
+  const [pregunta, setPregunta] = useState("");
+  const [cargando, setCargando] = useState(false);
+
+  useEffect(() => {
+    api.configuracionAsistente()
+      .then(setConfig)
+      .catch((error) => avisar(errorTexto(error), "error"));
+  }, []);
+
+  const enviar = async () => {
+    const texto = pregunta.trim();
+    if (!texto || cargando) return;
+    setMensajes((actual) => [...actual, { rol: "usuario", texto }]);
+    setPregunta("");
+    setCargando(true);
+    try {
+      const respuesta = await api.preguntarAsistente(texto);
+      setMensajes((actual) => [...actual, { rol: "ia", texto: respuesta }]);
+    } catch (error) {
+      setMensajes((actual) => [...actual, { rol: "error", texto: errorTexto(error) }]);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const limpiar = async () => {
+    try {
+      await api.limpiarAsistente();
+      setMensajes([{ rol: "ia", texto: "Chat reiniciado. ¿Qué producto buscas o qué quieres comparar?" }]);
+    } catch (error) {
+      avisar(errorTexto(error), "error");
+    }
+  };
+
+  return (
+    <Tarjeta
+      titulo="Asistente IA"
+      accion={
+        <div className="barra" style={{ margin: 0 }}>
+          <Etiqueta tono={config?.configurada ? "verde" : "amarillo"}>
+            {config?.configurada ? config.provider : "Sin configurar"}
+          </Etiqueta>
+          <button className="neutro mini" onClick={limpiar}>Reiniciar chat</button>
+        </div>
+      }
+    >
+      <p className="texto-suave">
+        Recomendaciones y comparaciones usando solo el inventario real (sin precios de costo).
+        {config?.configurada ? ` Modelo: ${config.modelo}.` : " Configura una key en ia.properties o la variable OPENROUTER_API_KEY."}
+      </p>
+      <div className="chat">
+        {mensajes.length === 0 && (
+          <div className="burbuja ia">Hola. Pregúntame, por ejemplo: «¿qué audífonos me recomiendas?» o «compara el Prod-01 con el Prod-02».</div>
+        )}
+        {mensajes.map((mensaje, indice) => (
+          <div key={indice} className={`burbuja ${mensaje.rol}`}>{mensaje.texto}</div>
+        ))}
+        {cargando && <div className="burbuja ia">El asistente está escribiendo…</div>}
+      </div>
+      <div className="chat-entrada">
+        <input
+          placeholder="Escribe tu pregunta…"
+          value={pregunta}
+          onChange={(e) => setPregunta(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && enviar()}
+          disabled={cargando}
+        />
+        <button className="primario" onClick={enviar} disabled={cargando}>Enviar</button>
+      </div>
+    </Tarjeta>
+  );
+}
+
 export default function VendedorView({ avisar }: { avisar: Avisar }) {
   const [seccion, setSeccion] = useState<Seccion>("Nueva venta");
-  const secciones: Seccion[] = ["Nueva venta", "Ventas", "Anular venta", "Garantías"];
+  const secciones: Seccion[] = ["Nueva venta", "Ventas", "Devoluciones", "Anular venta", "Garantías", "Asistente IA"];
   return (
     <>
       <Pestanas items={secciones} activa={seccion} onCambiar={setSeccion} />
       {seccion === "Nueva venta" && <NuevaVenta avisar={avisar} />}
       {seccion === "Ventas" && <ListaVentas avisar={avisar} />}
+      {seccion === "Devoluciones" && <Devoluciones avisar={avisar} />}
       {seccion === "Anular venta" && <AnularVenta avisar={avisar} />}
       {seccion === "Garantías" && <Garantias avisar={avisar} />}
+      {seccion === "Asistente IA" && <AsistenteIA avisar={avisar} />}
     </>
   );
 }

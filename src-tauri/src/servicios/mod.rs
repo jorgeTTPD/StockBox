@@ -1,6 +1,9 @@
-pub mod almacen;
 pub mod admin;
+pub mod almacen;
+pub mod asistente;
 pub mod catalogo;
+pub mod dashboard;
+pub mod imagenes;
 pub mod ventas;
 
 use crate::error::Result;

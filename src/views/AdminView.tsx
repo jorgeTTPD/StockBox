@@ -4,10 +4,10 @@ import { dinero, errorTexto, fechaCorta, fechaHora } from "../formato";
 import type {
   Auditoria,
   Caja,
+  DashboardDatos,
   Empleado,
   EmpleadoInput,
   Entrada,
-  Estadisticas,
   ItemCarrito,
   MigrationReport,
   Pedido,
@@ -16,6 +16,7 @@ import type {
   Proveedor,
   ProveedorInput,
   Rol,
+  VistaPrevia,
   Venta,
 } from "../types";
 import {
@@ -61,39 +62,118 @@ const columnasProducto: Columna<Producto>[] = [
   },
 ];
 
-function Resumen({ avisar }: { avisar: Avisar }) {
-  const [datos, setDatos] = useState<Estadisticas | null>(null);
-  const [criticos, setCriticos] = useState<Producto[]>([]);
+type Periodo = "HOY" | "ULTIMOS_7" | "ULTIMOS_30" | "TODO";
+const periodos: { valor: Periodo; texto: string }[] = [
+  { valor: "HOY", texto: "Hoy" },
+  { valor: "ULTIMOS_7", texto: "Últimos 7 días" },
+  { valor: "ULTIMOS_30", texto: "Últimos 30 días" },
+  { valor: "TODO", texto: "Todo el historial" },
+];
+
+function Barras({
+  items,
+  secundaria,
+  formato,
+}: {
+  items: { etiqueta: string; valor: number }[];
+  secundaria?: boolean;
+  formato?: (valor: number) => string;
+}) {
+  if (items.length === 0) return <div className="vacio">Sin datos en este período</div>;
+  const maximo = Math.max(1, ...items.map((item) => item.valor));
+  return (
+    <div className="grafica">
+      {items.map((item, indice) => (
+        <div className="barra-fila" key={indice}>
+          <span title={item.etiqueta}>
+            {item.etiqueta.length > 24 ? `${item.etiqueta.slice(0, 23)}…` : item.etiqueta}
+          </span>
+          <div className="barra-pista">
+            <div
+              className={secundaria ? "barra-relleno secundaria" : "barra-relleno"}
+              style={{ width: `${Math.max(2, (item.valor / maximo) * 100)}%` }}
+            />
+          </div>
+          <span className="valor-derecha">
+            {formato ? formato(item.valor) : Math.round(item.valor)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Dashboard({ avisar }: { avisar: Avisar }) {
+  const [periodo, setPeriodo] = useState<Periodo>("ULTIMOS_7");
+  const [datos, setDatos] = useState<DashboardDatos | null>(null);
   const [caja, setCaja] = useState<Caja | null>(null);
 
+  const cargar = async () => {
+    try {
+      setDatos(await api.dashboard(periodo));
+    } catch (error) {
+      avisar(errorTexto(error), "error");
+    }
+  };
+
   useEffect(() => {
-    api.estadisticas().then(setDatos).catch((e) => avisar(errorTexto(e), "error"));
-    api.productosCriticos().then(setCriticos).catch((e) => avisar(errorTexto(e), "error"));
-    api.estadoCaja().then(setCaja).catch((e) => avisar(errorTexto(e), "error"));
+    api.preferencias()
+      .then((preferencias) => {
+        if (periodos.some((opcion) => opcion.valor === preferencias.periodo_dashboard)) {
+          setPeriodo(preferencias.periodo_dashboard as Periodo);
+        }
+      })
+      .catch(() => {});
+    api.estadoCaja().then(setCaja).catch((error) => avisar(errorTexto(error), "error"));
   }, []);
 
-  if (!datos) return <div className="vacio">Cargando…</div>;
+  useEffect(() => {
+    void cargar();
+    api.guardarPreferencias(undefined, periodo).catch(() => {});
+  }, [periodo]);
+
+  if (!datos) return <div className="vacio">Cargando dashboard…</div>;
+  const resumen = datos.resumen;
   return (
     <div className="rejilla">
-      <div className="rejilla cuatro">
-        <Tarjeta titulo="Productos"><div className="estadistica"><div className="numero acento">{datos.productos}</div><div className="etiqueta-texto">en inventario</div></div></Tarjeta>
-        <Tarjeta titulo="Stock crítico"><div className="estadistica"><div className="numero" style={{ color: "var(--rojo)" }}>{datos.stock_critico}</div><div className="etiqueta-texto">5 unidades o menos</div></div></Tarjeta>
-        <Tarjeta titulo="Ventas de hoy"><div className="estadistica"><div className="numero acento">{dinero(datos.ventas_hoy)}</div><div className="etiqueta-texto">confirmadas</div></div></Tarjeta>
-        <Tarjeta titulo="Entradas de hoy"><div className="estadistica"><div className="numero acento">{datos.entradas_hoy}</div><div className="etiqueta-texto">unidades recibidas</div></div></Tarjeta>
-      </div>
-      <div className="rejilla dos">
-        <Tarjeta titulo="Estado de caja" accion={<Etiqueta tono={caja?.estado === "ABIERTA" ? "verde" : "rojo"}>{caja?.estado ?? "—"}</Etiqueta>}>
-          <p className="texto-suave">
-            {caja?.estado === "ABIERTA"
-              ? `Abierta el ${fechaCorta(caja.fecha_apertura)} por ${caja.ci_empleado}`
-              : "La caja está cerrada. Ábrela desde la pestaña Caja."}
-          </p>
-          <p className="texto-suave">Garantías vigentes: <strong>{datos.garantias_vigentes}</strong></p>
-        </Tarjeta>
-        <Tarjeta titulo="Reponer pronto" accion={<Etiqueta tono="amarillo">{criticos.length}</Etiqueta>}>
-          <div style={{ maxHeight: "220px", overflow: "auto" }}>
-            <DataTable filas={criticos} columnas={columnasProducto.slice(0, 2).concat(columnasProducto.slice(6))} />
+      <Tarjeta
+        titulo="Resumen general"
+        accion={
+          <div className="barra" style={{ margin: 0 }}>
+            <select value={periodo} onChange={(e) => setPeriodo(e.target.value as Periodo)}>
+              {periodos.map((opcion) => <option key={opcion.valor} value={opcion.valor}>{opcion.texto}</option>)}
+            </select>
+            <button className="neutro" onClick={cargar}>Actualizar</button>
           </div>
+        }
+      >
+        <p className="texto-suave">
+          Del {fechaCorta(datos.desde)} al {fechaCorta(datos.hasta)} · ventas confirmadas e inventario actual.
+        </p>
+        <div className="rejilla cuatro">
+          <div className="estadistica"><div className="numero acento">{dinero(resumen.total)}</div><div className="etiqueta-texto">total del período</div></div>
+          <div className="estadistica"><div className="numero acento">{dinero(resumen.ticket_promedio)}</div><div className="etiqueta-texto">ticket promedio · {resumen.cantidad_ventas} ventas</div></div>
+          <div className="estadistica"><div className="numero acento">{resumen.unidades}</div><div className="etiqueta-texto">unidades vendidas</div></div>
+          <div className="estadistica"><div className="numero" style={{ color: "var(--rojo)" }}>{resumen.stock_critico}</div><div className="etiqueta-texto">productos ≤ 5 uds.</div></div>
+        </div>
+        <div className="separador" />
+        <div className="rejilla dos">
+          <div className="estadistica"><div className="numero acento">{dinero(resumen.valor_inventario)}</div><div className="etiqueta-texto">valor del inventario · {resumen.productos} productos</div></div>
+          <div className="estadistica"><div className="numero">{caja?.estado ?? "—"}</div><div className="etiqueta-texto">estado de caja</div></div>
+        </div>
+      </Tarjeta>
+      <div className="rejilla dos">
+        <Tarjeta titulo="Ventas por día">
+          <Barras items={datos.ventas_por_dia.map((p) => ({ etiqueta: p.fecha, valor: p.total }))} formato={dinero} />
+        </Tarjeta>
+        <Tarjeta titulo="Ventas por categoría">
+          <Barras items={datos.ventas_por_categoria} formato={dinero} secundaria />
+        </Tarjeta>
+        <Tarjeta titulo="Top productos por unidades">
+          <Barras items={datos.top_productos} />
+        </Tarjeta>
+        <Tarjeta titulo="Stock por categoría">
+          <Barras items={datos.stock_por_categoria} secundaria />
         </Tarjeta>
       </div>
     </div>
@@ -222,6 +302,7 @@ function EntradasAdmin({ avisar }: { avisar: Avisar }) {
 function ProductosAdmin({ avisar }: { avisar: Avisar }) {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [categorias, setCategorias] = useState<string[]>([]);
+  const [imagenes, setImagenes] = useState<Record<string, string>>({});
   const [modal, setModal] = useState(false);
   const [nuevo, setNuevo] = useState<ProductoInput>({
     id_producto: "", nombre: "", marca: "", categoria: "", descripcion: "",
@@ -230,11 +311,25 @@ function ProductosAdmin({ avisar }: { avisar: Avisar }) {
 
   const cargar = async () => {
     try {
-      setProductos(await api.listarProductos());
+      const lista = await api.listarProductos();
+      setProductos(lista);
       setCategorias(await api.listarCategorias());
+      api.rutasImagenes(lista.map((producto) => producto.id_producto))
+        .then(setImagenes)
+        .catch(() => {});
     } catch (error) { avisar(errorTexto(error), "error"); }
   };
   useEffect(() => { void cargar(); }, []);
+
+  const subirImagen = async (id: string) => {
+    try {
+      const ruta = await api.elegirImagen();
+      if (!ruta) return;
+      await api.guardarImagen(id, ruta);
+      avisar(`Imagen actualizada para ${id}`, "ok");
+      cargar();
+    } catch (error) { avisar(errorTexto(error), "error"); }
+  };
 
   const guardar = async (evento: FormEvent) => {
     evento.preventDefault();
@@ -253,8 +348,24 @@ function ProductosAdmin({ avisar }: { avisar: Avisar }) {
   };
 
   const columnas: Columna<Producto>[] = [
+    {
+      titulo: "Img",
+      valor: (p) => imagenes[p.id_producto]
+        ? <img className="miniatura" src={api.imagenUrl(imagenes[p.id_producto])} alt={p.nombre} />
+        : <div className="sin-imagen">▣</div>,
+      ancho: "60px",
+    },
     ...columnasProducto,
-    { titulo: "", valor: (p) => <button className="mini peligro" onClick={() => eliminar(p.id_producto)}>Eliminar</button>, ancho: "85px" },
+    {
+      titulo: "",
+      valor: (p) => (
+        <div className="barra" style={{ margin: 0 }}>
+          <button className="mini" onClick={() => subirImagen(p.id_producto)}>Imagen</button>
+          <button className="mini peligro" onClick={() => eliminar(p.id_producto)}>Eliminar</button>
+        </div>
+      ),
+      ancho: "150px",
+    },
   ];
 
   return (
@@ -474,12 +585,25 @@ function AuditoriaAdmin({ avisar }: { avisar: Avisar }) {
 
 function DatosAdmin({ avisar }: { avisar: Avisar }) {
   const [reporte, setReporte] = useState<MigrationReport | null>(null);
-  const importar = async () => {
+  const [pendiente, setPendiente] = useState<string | null>(null);
+  const [vista, setVista] = useState<VistaPrevia | null>(null);
+
+  const elegir = async () => {
     try {
       const ruta = await api.elegirDirectorio();
       if (!ruta) return;
-      setReporte(await api.importarDatos(ruta));
+      setPendiente(ruta);
+      setVista(await api.vistaPreviaCsv(`${ruta}/inventario.csv`, "importar"));
+    } catch (error) { avisar(errorTexto(error), "error"); }
+  };
+
+  const importar = async () => {
+    if (!pendiente) return;
+    try {
+      setReporte(await api.importarDatos(pendiente));
       avisar("Importación completada", "ok");
+      setVista(null);
+      setPendiente(null);
     } catch (error) { avisar(errorTexto(error), "error"); }
   };
   const filas = reporte
@@ -498,7 +622,25 @@ function DatosAdmin({ avisar }: { avisar: Avisar }) {
       </Tarjeta>
       <Tarjeta titulo="Importar CSV originales">
         <p className="texto-suave">Selecciona la carpeta con los nueve CSV. Los registros existentes se conservan; solo se añaden los nuevos.</p>
-        <button className="primario" onClick={importar}>Seleccionar carpeta</button>
+        <button className="primario" onClick={elegir}>Seleccionar carpeta</button>
+        {vista && (
+          <Modal titulo="Vista previa de importación" onCerrar={() => setVista(null)}>
+            <p className="texto-suave">
+              {vista.total} producto(s) en el CSV. Los registros existentes se conservan.
+            </p>
+            <DataTable
+              filas={vista.filas}
+              columnas={vista.columnas.slice(0, 4).map((nombre, indice) => ({
+                titulo: nombre,
+                valor: (fila: string[]) => fila[indice] ?? "",
+              }))}
+            />
+            <div className="acciones">
+              <button className="neutro" onClick={() => setVista(null)}>Cancelar</button>
+              <button className="primario" onClick={importar}>Confirmar importación</button>
+            </div>
+          </Modal>
+        )}
         {reporte && (
           <div style={{ marginTop: 16 }}>
             <DataTable filas={filas} columnas={[
@@ -517,7 +659,7 @@ export default function AdminView({ avisar }: { avisar: Avisar }) {
   return (
     <>
       <Pestanas items={secciones} activa={seccion} onCambiar={setSeccion} />
-      {seccion === "Resumen" && <Resumen avisar={avisar} />}
+      {seccion === "Resumen" && <Dashboard avisar={avisar} />}
       {seccion === "Caja" && <Caja avisar={avisar} />}
       {seccion === "Inventario" && <InventarioAdmin avisar={avisar} />}
       {seccion === "Ventas" && <VentasAdmin avisar={avisar} />}

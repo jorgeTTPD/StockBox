@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { dinero, errorTexto, fechaCorta } from "../formato";
 import type { Entrada, Producto, Proveedor } from "../types";
+import ImportadorCSV from "../components/ImportadorCSV";
 import {
   Campo,
   DataTable,
@@ -238,31 +239,22 @@ function NuevaEntrada({ avisar }: { avisar: Avisar }) {
 }
 
 function ImportarEntradas({ avisar }: { avisar: Avisar }) {
-  const [cargando, setCargando] = useState(false);
-
-  const importar = async () => {
-    try {
-      const ruta = await api.elegirArchivo();
-      if (!ruta) return;
-      setCargando(true);
-      const cantidad = await api.importarEntradas(ruta);
-      avisar(`${cantidad} entrada(s) importadas`, "ok");
-    } catch (error) {
-      avisar(errorTexto(error), "error");
-    } finally {
-      setCargando(false);
-    }
-  };
-
   return (
     <Tarjeta titulo="Importar entradas desde CSV">
       <p className="texto-suave">
         Columnas requeridas: idProveedor, idProducto, nombreProducto, marca, categoria, precio y cantidad.
         Los productos nuevos se crean con precio de venta = precio × 1.3.
       </p>
-      <button className="primario" onClick={importar} disabled={cargando}>
-        {cargando ? "Importando…" : "Seleccionar archivo CSV"}
-      </button>
+      <ImportadorCSV
+        tipo="entradas"
+        titulo="entradas"
+        boton="Seleccionar archivo CSV"
+        avisar={avisar}
+        onConfirmar={async (ruta) => {
+          const cantidad = await api.importarEntradas(ruta);
+          avisar(`${cantidad} entrada(s) importadas`, "ok");
+        }}
+      />
     </Tarjeta>
   );
 }

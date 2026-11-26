@@ -1,7 +1,8 @@
 use crate::csv_io;
 use crate::error::{AppError, Result};
 use crate::models::{
-    ClienteInput, ItemCarrito, ItemVenta, OrdenCreada, OrdenInput, ResultadoVenta, Venta,
+    ClienteInput, Devolucion, ItemCarrito, ItemVenta, LineaVenta, OrdenCreada, OrdenInput,
+    ResultadoVenta, Venta,
 };
 use crate::security::generar_id;
 use crate::servicios::{auditar, catalogo};
@@ -495,6 +496,135 @@ fn factura_de(conn: &Connection, id_orden: &str) -> Result<String> {
     lineas.push(format!("TOTAL: ${total:.2}"));
     lineas.push("================".to_string());
     Ok(lineas.join("\n"))
+}
+
+pub fn buscar_linea(conn: &Connection, id_venta: &str) -> Result<Option<LineaVenta>> {
+    conn.query_row(
+        "SELECT v.id_venta, v.id_orden, v.estado, vi.id_producto, vi.nombre_producto, vi.cantidad, vi.precio_unitario, vi.subtotal \
+         FROM ventas v JOIN venta_items vi ON vi.id_venta = v.id_venta \
+         WHERE lower(v.id_venta) = lower(?1) LIMIT 1",
+        params![id_venta],
+        |fila| {
+            Ok(LineaVenta {
+                id_venta: fila.get(0)?,
+                id_orden: fila.get(1)?,
+                estado: fila.get(2)?,
+                id_producto: fila.get(3)?,
+                nombre_producto: fila.get(4)?,
+                cantidad: fila.get(5)?,
+                precio_unitario: fila.get(6)?,
+                total: fila.get(7)?,
+            })
+        },
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
+pub fn devolver_venta(
+    conn: &mut Connection,
+    id_venta: &str,
+    cantidad: i64,
+    ci: &str,
+) -> Result<String> {
+    if id_venta.trim().is_empty() || cantidad <= 0 {
+        return Err(AppError::Validation(
+            "Indica la venta y una cantidad mayor que cero".into(),
+        ));
+    }
+    let tx = conn.transaction()?;
+    let linea = buscar_linea(&tx, id_venta)?
+        .ok_or_else(|| AppError::NotFound(format!("Venta {id_venta}")))?;
+    if linea.estado != "CONFIRMADA" {
+        return Err(AppError::Conflict(
+            "Solo se pueden devolver ventas confirmadas".into(),
+        ));
+    }
+    if cantidad > linea.cantidad {
+        return Err(AppError::Validation(format!(
+            "No se pueden devolver más de {} unidades",
+            linea.cantidad
+        )));
+    }
+    if !validacion::fluido(linea.precio_unitario) {
+        return Err(AppError::Validation("Precio unitario inválido".into()));
+    }
+
+    let restante = linea.cantidad - cantidad;
+    let total_devuelto = cantidad as f64 * linea.precio_unitario;
+    let id_devolucion = generar_id("DEV");
+    tx.execute(
+        "INSERT INTO devoluciones(id_devolucion, id_venta, id_orden, id_producto, nombre_producto, cantidad, precio_unitario, total, fecha, ci_empleado) \
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![id_devolucion, linea.id_venta, linea.id_orden, linea.id_producto, linea.nombre_producto, cantidad, linea.precio_unitario, total_devuelto, crate::security::ahora(), ci],
+    )?;
+    tx.execute(
+        "UPDATE productos SET stock = stock + ?1 WHERE lower(id_producto) = lower(?2)",
+        params![cantidad, linea.id_producto],
+    )?;
+
+    if restante > 0 {
+        tx.execute(
+            "UPDATE venta_items SET cantidad = ?2, subtotal = ?3 WHERE id_venta = ?1",
+            params![
+                linea.id_venta,
+                restante,
+                restante as f64 * linea.precio_unitario
+            ],
+        )?;
+        let total: f64 = tx.query_row(
+            "SELECT COALESCE(SUM(subtotal), 0) FROM venta_items WHERE id_venta = ?1",
+            params![linea.id_venta],
+            |fila| fila.get(0),
+        )?;
+        tx.execute(
+            "UPDATE ventas SET total = ?2 WHERE id_venta = ?1",
+            params![linea.id_venta, total],
+        )?;
+    } else {
+        tx.execute(
+            "UPDATE ventas SET estado = 'ANULADA' WHERE id_venta = ?1",
+            params![linea.id_venta],
+        )?;
+        tx.execute(
+            "UPDATE garantias SET estado = 'ANULADA' WHERE id_venta = ?1",
+            params![linea.id_venta],
+        )?;
+    }
+    auditar(
+        &tx,
+        ci,
+        "DEVOLUCION",
+        &format!("{id_devolucion} | {} x{cantidad}", linea.id_producto),
+    )?;
+    tx.commit()?;
+    Ok(id_devolucion)
+}
+
+pub fn listar_devoluciones(conn: &Connection) -> Result<Vec<Devolucion>> {
+    let mut sentencia = conn.prepare(
+        "SELECT id_devolucion, id_venta, id_orden, id_producto, nombre_producto, cantidad, precio_unitario, total, fecha, ci_empleado \
+         FROM devoluciones ORDER BY fecha DESC, id_devolucion DESC",
+    )?;
+    let filas = sentencia.query_map([], |fila| {
+        Ok(Devolucion {
+            id_devolucion: fila.get(0)?,
+            id_venta: fila.get(1)?,
+            id_orden: fila.get(2)?,
+            id_producto: fila.get(3)?,
+            nombre_producto: fila.get(4)?,
+            cantidad: fila.get(5)?,
+            precio_unitario: fila.get(6)?,
+            total: fila.get(7)?,
+            fecha: fila.get(8)?,
+            ci_empleado: fila.get(9)?,
+        })
+    })?;
+    let mut resultado = Vec::new();
+    for fila in filas {
+        resultado.push(fila?);
+    }
+    Ok(resultado)
 }
 
 pub fn importar_ordenes_csv(conn: &mut Connection, ruta: &Path, ci: &str) -> Result<usize> {

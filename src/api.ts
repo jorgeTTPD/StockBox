@@ -1,19 +1,24 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type {
   Auditoria,
   Caja,
   Cliente,
   ClienteInput,
+  ConfigAsistente,
+  DashboardDatos,
+  Devolucion,
   Empleado,
   EmpleadoInput,
   Entrada,
   Estadisticas,
   ItemCarrito,
+  LineaVenta,
   MigrationReport,
   OrdenCreada,
   OrdenInput,
   Pedido,
+  Preferencias,
   Producto,
   ProductoInput,
   Proveedor,
@@ -21,6 +26,7 @@ import type {
   ResultadoVenta,
   Rol,
   Sesion,
+  VistaPrevia,
   Venta,
 } from "./types";
 
@@ -93,6 +99,36 @@ export const api = {
   importarDatos: (ruta: string) =>
     invoke<MigrationReport>("importar_datos", { ruta }),
 
+  buscarVenta: (id_venta: string) => invoke<LineaVenta | null>("buscar_venta", { id_venta }),
+  devolverVenta: (id_venta: string, cantidad: number) =>
+    invoke<string>("devolver_venta", { id_venta, cantidad }),
+  listarDevoluciones: () => invoke<Devolucion[]>("listar_devoluciones", {}),
+  dashboard: (periodo: string) => invoke<DashboardDatos>("dashboard", { periodo }),
+  vistaPreviaCsv: (ruta: string, tipo: string) =>
+    invoke<VistaPrevia>("vista_previa_csv", { ruta, tipo }),
+
+  rutaImagen: (id_producto: string) =>
+    invoke<string | null>("ruta_imagen_producto", { id_producto }),
+  rutasImagenes: (ids: string[]) => invoke<Record<string, string>>("rutas_imagenes", { ids }),
+  guardarImagen: (id_producto: string, ruta: string) =>
+    invoke<string>("guardar_imagen_producto", { id_producto, ruta }),
+  imagenUrl: (ruta: string) => convertFileSrc(ruta),
+
+  configuracionAsistente: () =>
+    invoke<ConfigAsistente>("configuracion_asistente", {}),
+  preguntarAsistente: (pregunta: string) =>
+    invoke<string>("preguntar_asistente", { pregunta }),
+  limpiarAsistente: () => invoke<void>("limpiar_asistente", {}),
+
+  preferencias: () => invoke<Preferencias>("preferencias", {}),
+  guardarPreferencias: (tema_oscuro?: boolean, periodo?: string) =>
+    invoke<Preferencias>("guardar_preferencias", {
+      tema_oscuro: tema_oscuro ?? null,
+      periodo: periodo ?? null,
+    }),
+
+  elegirImagen: () =>
+    open({ multiple: false, filters: [{ name: "Imágenes", extensions: ["png", "jpg", "jpeg"] }] }),
   elegirArchivo: () =>
     open({ multiple: false, filters: [{ name: "CSV o texto", extensions: ["csv", "txt"] }] }),
   elegirDirectorio: () => open({ directory: true, multiple: false }),

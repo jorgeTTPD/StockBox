@@ -15,7 +15,7 @@ const titulos: Record<Rol, { titulo: string; descripcion: string }> = {
   },
   CAJERO: {
     titulo: "Punto de venta",
-    descripcion: "Carrito, proformas, ventas, anulaciones y garantías",
+    descripcion: "Carrito, proformas, ventas, devoluciones y garantías",
   },
   ALMACENERO: {
     titulo: "Almacén",
@@ -26,12 +26,26 @@ const titulos: Record<Rol, { titulo: string; descripcion: string }> = {
 export default function App() {
   const [sesion, setSesion] = useState<Sesion | null>(null);
   const [listo, setListo] = useState(false);
+  const [temaOscuro, setTemaOscuro] = useState(
+    () => localStorage.getItem("stockbox-tema") !== "claro",
+  );
   const [aviso, setAviso] = useState<{ mensaje: string; tipo: TipoAviso } | null>(null);
   const temporizador = useRef<number | null>(null);
 
   useEffect(() => {
+    document.documentElement.dataset.tema = temaOscuro ? "oscuro" : "claro";
+  }, [temaOscuro]);
+
+  useEffect(() => {
     api.sesionActual()
-      .then(setSesion)
+      .then((actual) => {
+        setSesion(actual);
+        if (actual) {
+          api.preferencias()
+            .then((preferencias) => setTemaOscuro(preferencias.tema_oscuro))
+            .catch(() => {});
+        }
+      })
       .catch(() => setSesion(null))
       .finally(() => setListo(true));
   }, []);
@@ -41,6 +55,13 @@ export default function App() {
     if (temporizador.current !== null) window.clearTimeout(temporizador.current);
     temporizador.current = window.setTimeout(() => setAviso(null), 4500);
   }, []);
+
+  const cambiarTema = () => {
+    const nuevo = !temaOscuro;
+    setTemaOscuro(nuevo);
+    localStorage.setItem("stockbox-tema", nuevo ? "oscuro" : "claro");
+    if (sesion) api.guardarPreferencias(nuevo).catch(() => {});
+  };
 
   const salir = async () => {
     try {
@@ -52,7 +73,9 @@ export default function App() {
   };
 
   if (!listo) return <div className="vacio">Cargando StockBox…</div>;
-  if (!sesion) return <Login onLogin={setSesion} avisar={avisar} />;
+  if (!sesion) {
+    return <Login onLogin={setSesion} avisar={avisar} temaOscuro={temaOscuro} cambiarTema={cambiarTema} />;
+  }
 
   const info = titulos[sesion.rol];
   return (
@@ -69,6 +92,7 @@ export default function App() {
         </div>
         <nav className="menu">
           <button className="activo">▦ Panel principal</button>
+          <button onClick={cambiarTema}>{temaOscuro ? "☀ Tema claro" : "☾ Tema oscuro"}</button>
           <button onClick={() => avisar("StockBox v0.1.0 · Tauri + Rust + SQLite")}>ⓘ Acerca de</button>
         </nav>
         <button className="salir secundario" onClick={salir}>Cerrar sesión</button>

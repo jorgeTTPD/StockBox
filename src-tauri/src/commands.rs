@@ -1,14 +1,17 @@
+use crate::csv_io;
 use crate::db::Db;
 use crate::error::{AppError, Result};
 use crate::models::{
-    Auditoria, Caja, Cliente, ClienteInput, Empleado, EmpleadoInput, Entrada, Estadisticas,
-    ItemCarrito, OrdenCreada, OrdenInput, Pedido, Producto, ProductoInput, Proveedor,
-    ProveedorInput, ResultadoVenta, Sesion, Venta,
+    Auditoria, Caja, Cliente, ClienteInput, ConfigAsistente, DashboardDatos, Devolucion, Empleado,
+    EmpleadoInput, Entrada, Estadisticas, ItemCarrito, LineaVenta, OrdenCreada, OrdenInput, Pedido,
+    Preferencias, Producto, ProductoInput, Proveedor, ProveedorInput, ResultadoVenta, Sesion,
+    Venta, VistaPrevia,
 };
 use crate::security;
-use crate::servicios::{admin, almacen, catalogo, ventas};
+use crate::servicios::{admin, almacen, asistente, catalogo, dashboard, imagenes, ventas};
 use rusqlite::params;
 use rusqlite::OptionalExtension;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use tauri::State;
@@ -16,13 +19,17 @@ use tauri::State;
 pub struct AppState {
     pub db: Mutex<Db>,
     pub sesion: Mutex<Option<Sesion>>,
+    pub ruta_datos: PathBuf,
+    pub asistente: asistente::Asistente,
 }
 
 impl AppState {
-    pub fn new(db: Db) -> Self {
+    pub fn new(db: Db, ruta_datos: PathBuf) -> Self {
         Self {
             db: Mutex::new(db),
             sesion: Mutex::new(None),
+            ruta_datos,
+            asistente: asistente::Asistente::new(),
         }
     }
 }
@@ -441,4 +448,164 @@ pub fn importar_datos(
     sesion(&state, ADMIN)?;
     let mut db = bloqueo(&state)?;
     db.importar_csv(&PathBuf::from(ruta)).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn buscar_venta(
+    id_venta: String,
+    state: State<'_, AppState>,
+) -> std::result::Result<Option<LineaVenta>, String> {
+    sesion(&state, TODOS)?;
+    let db = bloqueo(&state)?;
+    ventas::buscar_linea(&db.conn, &id_venta).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn devolver_venta(
+    id_venta: String,
+    cantidad: i64,
+    state: State<'_, AppState>,
+) -> std::result::Result<String, String> {
+    let sesion = sesion(&state, ADMIN_CAJERO)?;
+    let mut db = bloqueo(&state)?;
+    ventas::devolver_venta(&mut db.conn, &id_venta, cantidad, &sesion.ci).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn listar_devoluciones(
+    state: State<'_, AppState>,
+) -> std::result::Result<Vec<Devolucion>, String> {
+    sesion(&state, TODOS)?;
+    let db = bloqueo(&state)?;
+    ventas::listar_devoluciones(&db.conn).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn dashboard(
+    periodo: String,
+    state: State<'_, AppState>,
+) -> std::result::Result<DashboardDatos, String> {
+    sesion(&state, ADMIN)?;
+    let db = bloqueo(&state)?;
+    dashboard::datos(&db.conn, &periodo).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn vista_previa_csv(
+    ruta: String,
+    tipo: String,
+    state: State<'_, AppState>,
+) -> std::result::Result<VistaPrevia, String> {
+    sesion(&state, TODOS)?;
+    let _ = tipo;
+    let (columnas, filas) = csv_io::leer(&PathBuf::from(ruta))?;
+    Ok(VistaPrevia {
+        columnas,
+        filas: filas.iter().take(8).cloned().collect(),
+        total: filas.len(),
+    })
+}
+
+#[tauri::command]
+pub fn ruta_imagen_producto(
+    id_producto: String,
+    state: State<'_, AppState>,
+) -> std::result::Result<Option<String>, String> {
+    sesion(&state, TODOS)?;
+    Ok(imagenes::ruta_para_ui(&state.ruta_datos, &id_producto))
+}
+
+#[tauri::command]
+pub fn rutas_imagenes(
+    ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> std::result::Result<HashMap<String, String>, String> {
+    sesion(&state, TODOS)?;
+    Ok(ids
+        .into_iter()
+        .filter_map(|id| imagenes::ruta_para_ui(&state.ruta_datos, &id).map(|ruta| (id, ruta)))
+        .collect())
+}
+
+#[tauri::command]
+pub fn guardar_imagen_producto(
+    id_producto: String,
+    ruta: String,
+    state: State<'_, AppState>,
+) -> std::result::Result<String, String> {
+    sesion(&state, ADMIN_ALMACEN)?;
+    let db = bloqueo(&state)?;
+    if catalogo::buscar_producto(&db.conn, &id_producto)?.is_none() {
+        return Err(AppError::NotFound(format!("Producto {id_producto}")).into());
+    }
+    drop(db);
+    imagenes::guardar(&state.ruta_datos, &id_producto, &PathBuf::from(ruta)).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn configuracion_asistente(
+    state: State<'_, AppState>,
+) -> std::result::Result<ConfigAsistente, String> {
+    sesion(&state, ADMIN_CAJERO)?;
+    Ok(state.asistente.config_para_ui(&state.ruta_datos))
+}
+
+#[tauri::command]
+pub fn preguntar_asistente(
+    pregunta: String,
+    state: State<'_, AppState>,
+) -> std::result::Result<String, String> {
+    sesion(&state, ADMIN_CAJERO)?;
+    let snapshot = {
+        let db = bloqueo(&state)?;
+        asistente::snapshot_inventario(&db.conn)?
+    };
+    state
+        .asistente
+        .preguntar(&state.ruta_datos, &snapshot, &pregunta)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn limpiar_asistente(state: State<'_, AppState>) -> std::result::Result<(), String> {
+    sesion(&state, ADMIN_CAJERO)?;
+    state.asistente.limpiar().map_err(Into::into)
+}
+
+fn leer_preferencias(db: &Db) -> Result<Preferencias> {
+    Ok(Preferencias {
+        tema_oscuro: db.meta("tema_oscuro")?.as_deref() != Some("false"),
+        periodo_dashboard: db
+            .meta("periodo_dashboard")?
+            .unwrap_or_else(|| "ULTIMOS_7".into()),
+    })
+}
+
+#[tauri::command]
+pub fn preferencias(state: State<'_, AppState>) -> std::result::Result<Preferencias, String> {
+    sesion(&state, TODOS)?;
+    let db = bloqueo(&state)?;
+    leer_preferencias(&db).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn guardar_preferencias(
+    tema_oscuro: Option<bool>,
+    periodo: Option<String>,
+    state: State<'_, AppState>,
+) -> std::result::Result<Preferencias, String> {
+    sesion(&state, TODOS)?;
+    if let Some(periodo) = periodo.as_deref() {
+        if !matches!(periodo, "HOY" | "ULTIMOS_7" | "ULTIMOS_30" | "TODO") {
+            return Err("Período no reconocido".into());
+        }
+    }
+    let db = bloqueo(&state)?;
+    if let Some(tema) = tema_oscuro {
+        db.set_meta("tema_oscuro", &tema.to_string())?;
+    }
+    if let Some(periodo) = periodo {
+        db.set_meta("periodo_dashboard", &periodo)?;
+    }
+    leer_preferencias(&db).map_err(Into::into)
 }

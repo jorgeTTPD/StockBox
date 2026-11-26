@@ -148,3 +148,44 @@ button.icono { background: transparent; border: 0; color: var(--suave); font-siz
 .lista-simple div { padding: 10px 12px; border-radius: 9px; background: var(--panel-2); border: 1px solid var(--borde); }
 .separador { height: 1px; background: var(--borde); margin: 18px 0; }
 .total-carrito { font-size: 20px; font-weight: 700; color: var(--acento); text-align: right; margin-top: 12px; }
+
+:root[data-tema="claro"] {
+  --fondo: #eef2f8;
+  --panel: #ffffff;
+  --panel-2: #f6f9fd;
+  --borde: #d8e1ee;
+  --texto: #122033;
+  --suave: #5a6b85;
+}
+:root[data-tema="claro"] .barra-lateral { background: linear-gradient(180deg, #e5edf9, #eef2f8); }
+:root[data-tema="claro"] .campo input,
+:root[data-tema="claro"] .campo select,
+:root[data-tema="claro"] .campo textarea,
+:root[data-tema="claro"] .barra input,
+:root[data-tema="claro"] .barra select { background: #fff; }
+:root[data-tema="claro"] .tabla th { background: #fff; }
+:root[data-tema="claro"] .factura,
+:root[data-tema="claro"] .demo,
+:root[data-tema="claro"] .lista-simple div { background: #f6f9fd; }
+:root[data-tema="claro"] .login-fondo { background: radial-gradient(circle at 20% 20%, #cfe6fb 0, transparent 45%), radial-gradient(circle at 85% 80%, #dfd8fb 0, transparent 40%), var(--fondo); }
+:root[data-tema="claro"] .login-tarjeta { background: #fff; }
+:root[data-tema="claro"] .etiqueta.neutro { background: #e2e8f0; color: #334155; }
+
+.grafica { display: grid; gap: 7px; }
+.barra-fila { display: grid; grid-template-columns: 170px 1fr 95px; gap: 12px; align-items: center; font-size: 12px; }
+.barra-pista { height: 10px; background: var(--panel-2); border-radius: 999px; overflow: hidden; border: 1px solid var(--borde); }
+.barra-relleno { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--acento), #818cf8); }
+.barra-relleno.secundaria { background: linear-gradient(90deg, #a78bfa, #f472b6); }
+.valor-derecha { text-align: right; font-variant-numeric: tabular-nums; color: var(--suave); }
+
+.chat { display: grid; gap: 10px; max-height: 380px; overflow: auto; padding: 6px 4px; }
+.burbuja { max-width: 82%; padding: 11px 14px; border-radius: 14px; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+.burbuja.usuario { justify-self: end; background: var(--acento); color: #071426; border-bottom-right-radius: 4px; }
+.burbuja.ia { justify-self: start; background: var(--panel-2); border: 1px solid var(--borde); border-bottom-left-radius: 4px; }
+.burbuja.error { justify-self: center; background: rgba(248,113,113,.13); border: 1px solid var(--rojo); color: var(--rojo); font-size: 12px; }
+.chat-entrada { display: flex; gap: 10px; margin-top: 14px; }
+.chat-entrada input { flex: 1; background: #0c1528; border: 1px solid var(--borde); border-radius: 9px; padding: 11px 13px; color: var(--texto); }
+:root[data-tema="claro"] .chat-entrada input { background: #fff; }
+
+.miniatura { width: 38px; height: 38px; object-fit: cover; border-radius: 8px; border: 1px solid var(--borde); }
+.sin-imagen { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 8px; background: var(--panel-2); color: var(--suave); font-size: 15px; }
